@@ -79,16 +79,28 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 		return ConfigurationPhase.REGISTER_BEAN;
 	}
 
+	/**
+	 *  首先获取自动装配类autoConfigurationClass上@OnBeanCondition注解中的值；如果获取不到，继续下一个循环。
+	 *  获取到相应的类，则通过类加载机制判断其是否存在，如果能加载到则返回。。。。 否则返回null。这里使用类加载机制判断Class是否存在时，不会对Class执行初始化操作。
+	 * @param autoConfigurationClasses
+	 * @param autoConfigurationMetadata
+	 * @return
+	 */
 	@Override
 	protected final ConditionOutcome[] getOutcomes(String[] autoConfigurationClasses,
 			AutoConfigurationMetadata autoConfigurationMetadata) {
 		ConditionOutcome[] outcomes = new ConditionOutcome[autoConfigurationClasses.length];
+		// 遍历所有的候选类
 		for (int i = 0; i < outcomes.length; i++) {
+			// 获取对应下标的候选类
 			String autoConfigurationClass = autoConfigurationClasses[i];
 			if (autoConfigurationClass != null) {
+				// 例如CacheAutoConfiguration类上被@ConditionalOnBean(CacheAspectSupport.class)注解标注，所以获取到的onBeanTypes局部变量值为：CacheAspectSupport。
 				Set<String> onBeanTypes = autoConfigurationMetadata.getSet(autoConfigurationClass, "ConditionalOnBean");
+				// 看下该候选类是否符合自动装配，返回值为null则表示符合
 				outcomes[i] = getOutcome(onBeanTypes, ConditionalOnBean.class);
 				if (outcomes[i] == null) {
+					// 如果符合，再判断@ConditionalOnSingleCandidate注解相关的类是否符合
 					Set<String> onSingleCandidateTypes = autoConfigurationMetadata.getSet(autoConfigurationClass,
 							"ConditionalOnSingleCandidate");
 					outcomes[i] = getOutcome(onSingleCandidateTypes, ConditionalOnSingleCandidate.class);
@@ -99,8 +111,12 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 	}
 
 	private ConditionOutcome getOutcome(Set<String> requiredBeanTypes, Class<? extends Annotation> annotation) {
+		// 实际@ConditionalOnBean注解真是意图是所对应的类需要被实例化后才允许自动装配
+		// 但是这里只是看下候选类@ConditionalOnBean的值所对应的类是否能够被加载到，如果能够被加载到则表示能够被自动装配
+		// 所以真实的判断逻辑是该候选类实例化的时候才进行判断，如果@ConditionalOnBean注解标注的类还没有实例化则先进行实例化，再继续实例化该候选类
 		List<String> missing = filter(requiredBeanTypes, ClassNameFilter.MISSING, getBeanClassLoader());
 		if (!missing.isEmpty()) {
+			//来到这里表示候选类不符合自动装配
 			ConditionMessage message = ConditionMessage.forCondition(annotation)
 					.didNotFind("required type", "required types").items(Style.QUOTE, missing);
 			return ConditionOutcome.noMatch(message);
@@ -111,11 +127,17 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 	@Override
 	public ConditionOutcome getMatchOutcome(ConditionContext context, AnnotatedTypeMetadata metadata) {
 		ConditionMessage matchMessage = ConditionMessage.empty();
+		// 获取候选类上的注解信息
 		MergedAnnotations annotations = metadata.getAnnotations();
 		if (annotations.isPresent(ConditionalOnBean.class)) {
+			// 类上存在@ConditionalOnBean注解，解析@ConditionalOnBean注解的内容，封装成Spec对象
 			Spec<ConditionalOnBean> spec = new Spec<>(context, metadata, annotations, ConditionalOnBean.class);
+			// 根据注解的内容进行条件装配，得到一个匹配结果
+			// 例如@ConditionalOnBean(ViewResolver.class)，则是看下工厂容器中是否存在ViewResolver类型的bean，存在则表示符合，不存在则不符合
 			MatchResult matchResult = getMatchingBeans(context, spec);
 			if (!matchResult.isAllMatched()) {
+				// 来到这里表示不匹配，unmatchedAnnotations，unmatchedNames，unmatchedTypes有一个或者多个不为空
+				// 返回一个ConditionOutcome对象，match为false表示不符合
 				String reason = createOnBeanNoMatchReason(matchResult);
 				return ConditionOutcome.noMatch(spec.message().because(reason));
 			}
@@ -137,10 +159,13 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 					matchResult.getNamesOfAllMatches());
 		}
 		if (metadata.isAnnotated(ConditionalOnMissingBean.class.getName())) {
+			// 例如：@ConditionalOnMissingBean(name = "viewResolver", value = ContentNegotiatingViewResolver.class)
+			// 其中会判断：名称为viewResolver、类型为ContentNegotiatingViewResolver的Bean不存在才表示符合
 			Spec<ConditionalOnMissingBean> spec = new Spec<>(context, metadata, annotations,
 					ConditionalOnMissingBean.class);
 			MatchResult matchResult = getMatchingBeans(context, spec);
 			if (matchResult.isAnyMatched()) {
+				// 来到这里表示所对应的bean已经被实例化，表示不符合自动装配
 				String reason = createOnMissingBeanNoMatchReason(matchResult);
 				return ConditionOutcome.noMatch(spec.message().because(reason));
 			}
@@ -151,7 +176,9 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 
 	protected final MatchResult getMatchingBeans(ConditionContext context, Spec<?> spec) {
 		ClassLoader classLoader = context.getClassLoader();
+		//获取工厂
 		ConfigurableListableBeanFactory beanFactory = context.getBeanFactory();
+		// 该字段表示是从哪个上下文获取，一般都是All，表示先从当前上下文获取，找不到则从父上下文获取
 		boolean considerHierarchy = spec.getStrategy() != SearchStrategy.CURRENT;
 		Set<Class<?>> parameterizedContainers = spec.getParameterizedContainers();
 		if (spec.getStrategy() == SearchStrategy.ANCESTORS) {
@@ -161,16 +188,25 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 			beanFactory = (ConfigurableListableBeanFactory) parent;
 		}
 		MatchResult result = new MatchResult();
+		// 获取需要忽略的beanName，正常来说都不会设置忽略bean
 		Set<String> beansIgnoredByType = getNamesOfBeansIgnoredByType(classLoader, beanFactory, considerHierarchy,
 				spec.getIgnoredTypes(), parameterizedContainers);
+		// 遍历注解上的type属性，获取type所对应的bean
 		for (String type : spec.getTypes()) {
+			// 从beanDefinitionNames和manualSingletonNames中查找到相应类型的所有bean，这里只要所对应的bean的类定义已经被注册就代表存在
+			// beanDefinitionNames中存储通过配置类解析阶段和Bean注册阶段的一些Bean；比如：启动类、自动装配类、@Bean方法注入的Bean、Controller、Service等等。
+			// manualSingletonNames，从名字（手工单例名称）来看：在 spring Bean注册的过程中，会手动触发一些bean的注册。
+			// 比如在springboot启动过程中，会显示的注册一些配置 bean：springBootBanner，springApplicationArguments，systemEnvironment，systemProperties等等。
 			Collection<String> typeMatches = getBeanNamesForType(classLoader, considerHierarchy, beanFactory, type,
 					parameterizedContainers);
+			// 过滤需要忽略的bean
 			typeMatches.removeAll(beansIgnoredByType);
 			if (typeMatches.isEmpty()) {
+				// 来到这里表示该类型的bean在工厂的容器中不存在
 				result.recordUnmatchedType(type);
 			}
 			else {
+				// 来到这里表示该类型的bean在工厂的容器中存在
 				result.recordMatchedType(type, typeMatches);
 			}
 		}
@@ -185,11 +221,15 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 				result.recordMatchedAnnotation(annotation, annotationMatches);
 			}
 		}
+		// 遍历注解的name属性，根据beanName查找bean
 		for (String beanName : spec.getNames()) {
+			// containsBean方法时判断是被被实例化，或者类定义被注册就表示已经存在
 			if (!beansIgnoredByType.contains(beanName) && containsBean(beanFactory, beanName, considerHierarchy)) {
+				// 来到这里表示name属性的bean不需要忽略，并且该bean在工厂的容器中已经存在
 				result.recordMatchedName(beanName);
 			}
 			else {
+				// 来到这里表示该bean在工厂的容器中不存在
 				result.recordUnmatchedName(beanName);
 			}
 		}
@@ -210,6 +250,7 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 	private Set<String> getBeanNamesForType(ClassLoader classLoader, boolean considerHierarchy,
 			ListableBeanFactory beanFactory, String type, Set<Class<?>> parameterizedContainers) throws LinkageError {
 		try {
+			// 从工厂中获取该类型的bean
 			return getBeanNamesForType(beanFactory, considerHierarchy, resolve(type, classLoader),
 					parameterizedContainers);
 		}
@@ -220,6 +261,7 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 
 	private Set<String> getBeanNamesForType(ListableBeanFactory beanFactory, boolean considerHierarchy, Class<?> type,
 			Set<Class<?>> parameterizedContainers) {
+		//从工厂中获取该类型的bean
 		Set<String> result = collectBeanNamesForType(beanFactory, considerHierarchy, type, parameterizedContainers,
 				null);
 		return (result != null) ? result : Collections.emptySet();
@@ -227,6 +269,7 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 
 	private Set<String> collectBeanNamesForType(ListableBeanFactory beanFactory, boolean considerHierarchy,
 			Class<?> type, Set<Class<?>> parameterizedContainers, Set<String> result) {
+		// 从spring工厂中获取所有该类型的beanName
 		result = addAll(result, beanFactory.getBeanNamesForType(type, true, false));
 		for (Class<?> container : parameterizedContainers) {
 			ResolvableType generic = ResolvableType.forClassWithGenerics(container, type);
@@ -693,11 +736,13 @@ class OnBeanCondition extends FilteringSpringBootCondition implements Configurat
 		}
 
 		boolean isAllMatched() {
+			// unmatchedAnnotations，unmatchedNames，unmatchedTypes都为空就返回ture，只要有一个不为空才返回false
 			return this.unmatchedAnnotations.isEmpty() && this.unmatchedNames.isEmpty()
 					&& this.unmatchedTypes.isEmpty();
 		}
 
 		boolean isAnyMatched() {
+			// matchedAnnotations，matchedNames，matchedTypes只要有一个不为空就返回ture，都为空才返回false
 			return (!this.matchedAnnotations.isEmpty()) || (!this.matchedNames.isEmpty())
 					|| (!this.matchedTypes.isEmpty());
 		}

@@ -58,8 +58,13 @@ public class EventPublishingRunListener implements SpringApplicationRunListener,
 	public EventPublishingRunListener(SpringApplication application, String[] args) {
 		this.application = application;
 		this.args = args;
+		//初始化initialMulticaster：SimpleApplicationEventMulticaster
 		this.initialMulticaster = new SimpleApplicationEventMulticaster();
+		//将SpringApplication中的11个Spring事件监听器添加到initialMulticaster
 		for (ApplicationListener<?> listener : application.getListeners()) {
+			// SimpleApplicationEventMulticaster 继承自AbstractApplicationEventMulticaster，而其自身并没有addApplicationListener(ApplicationListener)方法，
+			// 但其父类AbstractApplicationEventMulticaster有，所以进入到AbstractApplicationEventMulticaster#addApplicationListener(ApplicationListener)方法
+			// 将传入的Spring事件监听器listener添加到defaultRetriever对象的List类型的applicationListeners成员中
 			this.initialMulticaster.addApplicationListener(listener);
 		}
 	}
@@ -71,11 +76,17 @@ public class EventPublishingRunListener implements SpringApplicationRunListener,
 
 	@Override
 	public void starting() {
+		// 1. 先新建一个Spring事件：ApplicationStartingEvent
+		// 2. 调用SimpleApplicationEventMulticaster#multicastEvent方法发布ApplicationStartingEvent事件
+		// 2.1 获取执行Spring事件任务的线程池
+		// 2.2 有线程池则异步执行，没有则同步执行Spring事件
 		this.initialMulticaster.multicastEvent(new ApplicationStartingEvent(this.application, this.args));
 	}
 
 	@Override
 	public void environmentPrepared(ConfigurableEnvironment environment) {
+		// 1. 先新建一个Spring事件：ApplicationEnvironmentPreparedEvent
+		// 2. 调用SimpleApplicationEventMulticaster#multicastEvent方法发布ApplicationEnvironmentPreparedEvent事件
 		this.initialMulticaster
 				.multicastEvent(new ApplicationEnvironmentPreparedEvent(this.application, this.args, environment));
 	}
@@ -100,6 +111,7 @@ public class EventPublishingRunListener implements SpringApplicationRunListener,
 	@Override
 	public void started(ConfigurableApplicationContext context) {
 		context.publishEvent(new ApplicationStartedEvent(this.application, this.args, context));
+		//发布一个AvailabilityChangeEvent事件，状态：ReadinessState.CORRECT，表示应用已处于活动状态。
 		AvailabilityChangeEvent.publish(context, LivenessState.CORRECT);
 	}
 

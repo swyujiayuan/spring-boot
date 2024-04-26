@@ -58,6 +58,7 @@ class StartupInfoLogger {
 
 	void logStarted(Log applicationLog, StopWatch stopWatch) {
 		if (applicationLog.isInfoEnabled()) {
+			// getStartedMessage获取程序启动后需要打印的信息，包括：启动类名称、程序启动需要的时间。
 			applicationLog.info(getStartedMessage(stopWatch));
 		}
 	}

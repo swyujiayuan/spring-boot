@@ -96,7 +96,9 @@ public class AutoConfigurationImportSelector implements DeferredImportSelector, 
 		if (!isEnabled(annotationMetadata)) {
 			return NO_IMPORTS;
 		}
+		// Spring Boot自动装配的入口，这里会拿到符合条件的自动装配的类
 		AutoConfigurationEntry autoConfigurationEntry = getAutoConfigurationEntry(annotationMetadata);
+		// 返回配置类
 		return StringUtils.toStringArray(autoConfigurationEntry.getConfigurations());
 	}
 
@@ -119,13 +121,24 @@ public class AutoConfigurationImportSelector implements DeferredImportSelector, 
 		if (!isEnabled(annotationMetadata)) {
 			return EMPTY_ENTRY;
 		}
+		// 1. 获取@EnableAutoConfiguration标注类的元信息
 		AnnotationAttributes attributes = getAttributes(annotationMetadata);
+		// 2. 返回自动装配类的候选类名集合，用Spring Framework工厂机制的加载器SpringFactoriesLoader，
+		// 通过SpringFactoriesLoader#loadFactoryNames(Class, ClassLoader)方法
+		// 读取所有META-INF/spring.factories资源中@EnableAutoConfiguration所关联的自动装配Class集合。
 		List<String> configurations = getCandidateConfigurations(annotationMetadata, attributes);
+		// 3. 移除重复对象，利用Set不可重复性对自动装配Class集合进行去重，因为自动装配组件存在重复定义的情况
 		configurations = removeDuplicates(configurations);
+		// 4. 自动装配组件的排除名单，读取当前配置类所标注的@EnableAutoConfiguration注解的属性exclude和excludeName，
+		// 并与spring.autoconfigure.exclude配置属性的值 合并为自动装配class排除集合。
 		Set<String> exclusions = getExclusions(annotationMetadata, attributes);
+		// 5.1. 校验自动装配Class排除集合的合法性、并排除掉自动装配Class排除集合中的所有Class（不需要自动装配的Class）
 		checkExcludedClasses(configurations, exclusions);
+		// 5.2 排除掉不需要自动装配的Class
 		configurations.removeAll(exclusions);
+		// 6. 进一步过滤候选自动装配Class集合中不符合条件装配的Class成员,OnBeanCondition，OnClassCondition，OnWebApplicationCondition，调用他们的match方法进行过滤
 		configurations = getConfigurationClassFilter().filter(configurations);
+		// 7. 触发自动装配的导入事件，事件包括候选的装配组件类名单和排除名单。
 		fireAutoConfigurationImportEvents(configurations, exclusions);
 		return new AutoConfigurationEntry(configurations, exclusions);
 	}
@@ -175,6 +188,11 @@ public class AutoConfigurationImportSelector implements DeferredImportSelector, 
 	 * @return a list of candidate configurations
 	 */
 	protected List<String> getCandidateConfigurations(AnnotationMetadata metadata, AnnotationAttributes attributes) {
+		// getSpringFactoriesLoaderFactoryClass()方法返回我们熟悉的EnableAutoConfiguration注解类；
+		// 紧接着，SpringFactoriesLoader.loadFactoryNames(Class<?>, ClassLoader)方法会获取所有META-INF/Spring.factories的配置文件，进而获取到所有的自动装配类；
+		// 1. 搜索指定ClassLoader下所有的META-INF/spring.fatories资源内容；
+		// 2. 将搜索到的资源内容作为Properties文件读取，合并为一个Key为接口的全类名、Value为实现类全类名 列表的Map，作为方法的返回值；
+		// 3. 最后从上一步返回的Map中查找并返回方法指定类型 对应的实现类全类名列表。
 		List<String> configurations = SpringFactoriesLoader.loadFactoryNames(getSpringFactoriesLoaderFactoryClass(),
 				getBeanClassLoader());
 		Assert.notEmpty(configurations, "No auto configuration classes found in META-INF/spring.factories. If you "
@@ -249,10 +267,14 @@ public class AutoConfigurationImportSelector implements DeferredImportSelector, 
 
 	private ConfigurationClassFilter getConfigurationClassFilter() {
 		if (this.configurationClassFilter == null) {
+			// 从所有META-INF/spring.factories文件中获取所有的自动装配过滤器，
+			// 这里有3个，OnBeanCondition，OnClassCondition，OnWebApplicationCondition
 			List<AutoConfigurationImportFilter> filters = getAutoConfigurationImportFilters();
 			for (AutoConfigurationImportFilter filter : filters) {
+				// 如果是Aware接口则调用一下Aware方法
 				invokeAwareMethods(filter);
 			}
+			// 将获取到的ImportFilter赋值到ConfigurationClassFilter的filters属性中
 			this.configurationClassFilter = new ConfigurationClassFilter(this.beanClassLoader, filters);
 		}
 		return this.configurationClassFilter;
@@ -356,10 +378,16 @@ public class AutoConfigurationImportSelector implements DeferredImportSelector, 
 			long startTime = System.nanoTime();
 			String[] candidates = StringUtils.toStringArray(configurations);
 			boolean skipped = false;
+			// filters就是自动装配过滤器，
+			// OnBeanCondition，OnClassCondition，OnWebApplicationCondition他们都继承自FilteringSpringBootCondition类，依次调用他们的match方法进行过滤
+			// 对获取到的所有自动装配类（最干净、最简单的SpringBoot程序有127个）执行过滤操作（条件装配）后，还剩23个自动装配类
 			for (AutoConfigurationImportFilter filter : this.filters) {
+				// 对每个候选类都进行三次过滤，三次过滤之后依旧符合的则返回，这里返回的是一个布尔值数组，对应下标为ture，则表示对应的后续类符合
+				// 条件装配判定逻辑的入口统一为FilteringSpringBootCondition#match
 				boolean[] match = filter.match(candidates, this.autoConfigurationMetadata);
 				for (int i = 0; i < match.length; i++) {
 					if (!match[i]) {
+						// 不符合的则设置为null，后续会排除掉这些候选类
 						candidates[i] = null;
 						skipped = true;
 					}
@@ -371,6 +399,7 @@ public class AutoConfigurationImportSelector implements DeferredImportSelector, 
 			List<String> result = new ArrayList<>(candidates.length);
 			for (String candidate : candidates) {
 				if (candidate != null) {
+					// 不为null则表示上面三次匹配都满足，则放进返回结果中
 					result.add(candidate);
 				}
 			}

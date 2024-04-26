@@ -43,19 +43,29 @@ class SpringApplicationRunListeners {
 	}
 
 	void starting() {
+		// 遍历this.listeners集合，里面只有一个对象EventPublishingRunListeners
 		for (SpringApplicationRunListener listener : this.listeners) {
+			//这里调用EventPublishingRunListeners#starting方法
+			// EventPublishingRunListeners通过其内部的initialMulticaster成员广播ApplicationStartingEvent事件
 			listener.starting();
 		}
 	}
 
 	void environmentPrepared(ConfigurableEnvironment environment) {
+		// 遍历this.listeners集合，里面只有一个对象EventPublishingRunListeners
 		for (SpringApplicationRunListener listener : this.listeners) {
+			//这里调用EventPublishingRunListeners#environmentPrepared方法
+			// EventPublishingRunListeners通过其内部的initialMulticaster成员广播ApplicationEnvironmentPreparedEvent事件
+			//在这个阶段 ,ConfigFileApplicationListener事件监听器会进行yaml/properties配置文件的加载；LoggingApplicationListener事件监听器会进行日志系统的初始化
 			listener.environmentPrepared(environment);
 		}
 	}
 
 	void contextPrepared(ConfigurableApplicationContext context) {
+		// 遍历this.listeners集合，里面只有一个对象EventPublishingRunListeners
 		for (SpringApplicationRunListener listener : this.listeners) {
+			//这里调用EventPublishingRunListeners#environmentPrepared方法
+			// 此处只有BackgroundPreinitializer和DelegatingApplicationListener两个事件监听器会处理ApplicationContextInitializedEvent事件，然而它俩处理逻辑中什么都没做
 			listener.contextPrepared(context);
 		}
 	}

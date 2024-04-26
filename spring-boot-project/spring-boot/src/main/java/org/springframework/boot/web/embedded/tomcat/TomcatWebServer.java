@@ -101,6 +101,7 @@ public class TomcatWebServer implements WebServer {
 		this.tomcat = tomcat;
 		this.autoStart = autoStart;
 		this.gracefulShutdown = (shutdown == Shutdown.GRACEFUL) ? new GracefulShutdown(tomcat) : null;
+		// 初始化tomcat服务器
 		initialize();
 	}
 
@@ -108,6 +109,7 @@ public class TomcatWebServer implements WebServer {
 		logger.info("Tomcat initialized with port(s): " + getPortsDescription(false));
 		synchronized (this.monitor) {
 			try {
+				// 将engineName和instanceId用-拼接到一起
 				addInstanceIdToEngineName();
 
 				Context context = findContext();
@@ -115,11 +117,13 @@ public class TomcatWebServer implements WebServer {
 					if (context.equals(event.getSource()) && Lifecycle.START_EVENT.equals(event.getType())) {
 						// Remove service connectors so that protocol binding doesn't
 						// happen when the service is started.
+						// 删除Connectors，以便再启动服务时不发生协议绑定
 						removeServiceConnectors();
 					}
 				});
 
 				// Start the server to trigger initialization listeners
+				// 初始化tomcat服务器
 				this.tomcat.start();
 
 				// We can re-throw failure exception directly in the main thread
@@ -134,6 +138,7 @@ public class TomcatWebServer implements WebServer {
 
 				// Unlike Jetty, all Tomcat threads are daemon threads. We create a
 				// blocking non-daemon to stop immediate shutdown
+				// 所有的tomcat线程都是守护线程，所以创建一个阻塞非守护线程来避免立即关闭
 				startDaemonAwaitThread();
 			}
 			catch (Exception ex) {

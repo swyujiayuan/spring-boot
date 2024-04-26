@@ -140,6 +140,7 @@ public class ServletWebServerApplicationContext extends GenericWebApplicationCon
 	@Override
 	public final void refresh() throws BeansException, IllegalStateException {
 		try {
+			// 父类AbstractApplicationContext#refresh
 			super.refresh();
 		}
 		catch (RuntimeException ex) {
@@ -153,8 +154,10 @@ public class ServletWebServerApplicationContext extends GenericWebApplicationCon
 
 	@Override
 	protected void onRefresh() {
+		//首先调用父类AbstractApplicationContext的onRefresh()方法，创建一个主题对象
 		super.onRefresh();
 		try {
+			// 开始内嵌Tomcat服务器
 			createWebServer();
 		}
 		catch (Throwable ex) {
@@ -171,10 +174,15 @@ public class ServletWebServerApplicationContext extends GenericWebApplicationCon
 	}
 
 	private void createWebServer() {
+		// 第一次进来，默认webServer 是 null
 		WebServer webServer = this.webServer;
+		// 第一次进行，默认servletContext 是 null
 		ServletContext servletContext = getServletContext();
 		if (webServer == null && servletContext == null) {
+			// 从BeanFactory中获取ServletWebServerFactory的实现类，如果是Web则是TomcatServletWebServerFactory
 			ServletWebServerFactory factory = getWebServerFactory();
+			// 获取Servlet上下文初始化器servletContextInitializer（getSelfInitializer()方法会初始化Tomcat对象），获取webServer（完成内嵌Tomcat的API调用）
+			// 注意getSelfInitializer()返回一个lambda表达式，其中的内容不会执行，而是在启动TomcatEmbeddedContext时才会执行lambda
 			this.webServer = factory.getWebServer(getSelfInitializer());
 			getBeanFactory().registerSingleton("webServerGracefulShutdown",
 					new WebServerGracefulShutdownLifecycle(this.webServer));
@@ -189,6 +197,7 @@ public class ServletWebServerApplicationContext extends GenericWebApplicationCon
 				throw new ApplicationContextException("Cannot initialize servlet context", ex);
 			}
 		}
+		// 根据上下文的配置属性 替换servlet相关的属性资源
 		initPropertySources();
 	}
 
@@ -200,6 +209,7 @@ public class ServletWebServerApplicationContext extends GenericWebApplicationCon
 	 */
 	protected ServletWebServerFactory getWebServerFactory() {
 		// Use bean names so that we don't consider the hierarchy
+		// 从BeanFactory中获取所有ServletWebServerFactory接口的实现类，如果存在多个，则抛异常,其中默认的 Web 环境就是 TomcatServletWebServerFactory
 		String[] beanNames = getBeanFactory().getBeanNamesForType(ServletWebServerFactory.class);
 		if (beanNames.length == 0) {
 			throw new ApplicationContextException("Unable to start ServletWebServerApplicationContext due to missing "
@@ -209,6 +219,7 @@ public class ServletWebServerApplicationContext extends GenericWebApplicationCon
 			throw new ApplicationContextException("Unable to start ServletWebServerApplicationContext due to multiple "
 					+ "ServletWebServerFactory beans : " + StringUtils.arrayToCommaDelimitedString(beanNames));
 		}
+		// 实例化该ServletWebServerFactory，也就是TomcatServletWebServerFactory
 		return getBeanFactory().getBean(beanNames[0], ServletWebServerFactory.class);
 	}
 

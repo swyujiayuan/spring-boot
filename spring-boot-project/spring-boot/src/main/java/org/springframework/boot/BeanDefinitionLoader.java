@@ -124,6 +124,7 @@ class BeanDefinitionLoader {
 	 */
 	int load() {
 		int count = 0;
+		// 这里的sources实际就是启动类
 		for (Object source : this.sources) {
 			count += load(source);
 		}
@@ -133,6 +134,7 @@ class BeanDefinitionLoader {
 	private int load(Object source) {
 		Assert.notNull(source, "Source must not be null");
 		if (source instanceof Class<?>) {
+			// 启动类是一个Class，所以这里转换一下
 			return load((Class<?>) source);
 		}
 		if (source instanceof Resource) {
@@ -154,6 +156,8 @@ class BeanDefinitionLoader {
 			load(loader);
 		}
 		if (isEligible(source)) {
+			// 调用AnnotatedBeanDefinitionReader#register方法，
+			// 形成AnnotationConfigApplicationContext扫描和注册配置类的基础，并将配置类解析为Bean定义BeanDefinition。
 			this.annotatedReader.register(source);
 			return 1;
 		}

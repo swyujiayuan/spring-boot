@@ -48,6 +48,10 @@ class OnWebApplicationCondition extends FilteringSpringBootCondition {
 
 	private static final String REACTIVE_WEB_APPLICATION_CLASS = "org.springframework.web.reactive.HandlerResult";
 
+	// OnWebApplicationCondition的执行逻辑和OnClassCondition一样，区别在于
+	// 1. OnClassCondition判断的是@ConditionalOnClass注解，OnWebApplicationCondition判断的是@ConditionalOnWebApplication注解
+	// 2. OnClassCondition依靠类加载机制判断@ConditionalOnClass注解value属性中的Class是否存在；
+	// OnWebApplicationCondition同样也是依靠类加载机制，但是判断的内容要少很多，其仅仅判断<ANY、SERVLET、REACTIVE>三种应用类型对应的类是否存在。
 	@Override
 	protected ConditionOutcome[] getOutcomes(String[] autoConfigurationClasses,
 			AutoConfigurationMetadata autoConfigurationMetadata) {
@@ -55,6 +59,7 @@ class OnWebApplicationCondition extends FilteringSpringBootCondition {
 		for (int i = 0; i < outcomes.length; i++) {
 			String autoConfigurationClass = autoConfigurationClasses[i];
 			if (autoConfigurationClass != null) {
+				// 看下后续类是否符合自动装配，返回null则表示符合自动装配
 				outcomes[i] = getOutcome(
 						autoConfigurationMetadata.get(autoConfigurationClass, "ConditionalOnWebApplication"));
 			}
@@ -64,21 +69,27 @@ class OnWebApplicationCondition extends FilteringSpringBootCondition {
 
 	private ConditionOutcome getOutcome(String type) {
 		if (type == null) {
+			 // type为null，则表示该候选类没有标注@ConditionalOnWebApplication注解，返回null，表示可以自动装配
 			return null;
 		}
+		// 这里根据Web的类型判断是否存在对应的类
 		ConditionMessage.Builder message = ConditionMessage.forCondition(ConditionalOnWebApplication.class);
 		if (ConditionalOnWebApplication.Type.SERVLET.name().equals(type)) {
 			if (!ClassNameFilter.isPresent(SERVLET_WEB_APPLICATION_CLASS, getBeanClassLoader())) {
+				// 如果没有org.springframework.web.context.support.GenericWebApplicationContext类则返回ConditionOutcome对象，表示候选类不符合自动装配
 				return ConditionOutcome.noMatch(message.didNotFind("servlet web application classes").atAll());
 			}
 		}
 		if (ConditionalOnWebApplication.Type.REACTIVE.name().equals(type)) {
 			if (!ClassNameFilter.isPresent(REACTIVE_WEB_APPLICATION_CLASS, getBeanClassLoader())) {
+				// 如果没有org.springframework.web.reactive.HandlerResult类则返回ConditionOutcome对象，表示候选类不符合自动装配
 				return ConditionOutcome.noMatch(message.didNotFind("reactive web application classes").atAll());
 			}
 		}
 		if (!ClassNameFilter.isPresent(SERVLET_WEB_APPLICATION_CLASS, getBeanClassLoader())
 				&& !ClassUtils.isPresent(REACTIVE_WEB_APPLICATION_CLASS, getBeanClassLoader())) {
+			// 没有org.springframework.web.reactive.HandlerResult类有没有org.springframework.web.context.support.GenericWebApplicationContext
+			// 则返回ConditionOutcome对象，表示候选类不符合自动装配
 			return ConditionOutcome.noMatch(message.didNotFind("reactive or servlet web application classes").atAll());
 		}
 		return null;

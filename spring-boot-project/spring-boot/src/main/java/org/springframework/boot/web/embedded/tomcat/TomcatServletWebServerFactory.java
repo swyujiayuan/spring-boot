@@ -171,9 +171,16 @@ public class TomcatServletWebServerFactory extends AbstractServletWebServerFacto
 
 	@Override
 	public WebServer getWebServer(ServletContextInitializer... initializers) {
+		// 走进这里时，initializers还没有执行
 		if (this.disableMBeanRegistry) {
 			Registry.disableRegistry();
 		}
+		// 完成Tomcat的API调用，把需要的对象创建好、参数设置好
+		// Tomcat有两个核心功能：<处理 Socket 连接，负责网络字节流与 Request 和 Response 对象的转化>、<加载和管理 Servlet，以及具体处理 Request 请求>。
+		// 而针对这两个功能，Tomcat 设计了两个核心组件来分别完成这两件事，即：连接器Connector和容器Container（包括：Engine、Host、Context、Wrapper）。
+		//所以，其中最重要的两件事是：
+		//1> 把连接器 Connector 对象添加到 Tomcat 中；
+		//2> 配置容器引擎，configureEngine(tomcat.getEngine());
 		Tomcat tomcat = new Tomcat();
 		File baseDir = (this.baseDirectory != null) ? this.baseDirectory : createTempDir("tomcat");
 		tomcat.setBaseDir(baseDir.getAbsolutePath());
@@ -187,7 +194,9 @@ public class TomcatServletWebServerFactory extends AbstractServletWebServerFacto
 		for (Connector additionalConnector : this.additionalTomcatConnectors) {
 			tomcat.getService().addConnector(additionalConnector);
 		}
+		// 准备tomcatEmbeddedContext并将其设置到tomcat中，其中会把上面获取到的servletContextInitializer绑定到tomcatEmbeddedContext。
 		prepareContext(tomcat.getHost(), initializers);
+		// 构建tomcatWebServer
 		return getTomcatWebServer(tomcat);
 	}
 

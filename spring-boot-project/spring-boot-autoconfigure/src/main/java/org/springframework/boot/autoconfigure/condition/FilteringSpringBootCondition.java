@@ -46,9 +46,11 @@ abstract class FilteringSpringBootCondition extends SpringBootCondition
 	@Override
 	public boolean[] match(String[] autoConfigurationClasses, AutoConfigurationMetadata autoConfigurationMetadata) {
 		ConditionEvaluationReport report = ConditionEvaluationReport.find(this.beanFactory);
+		// getOutcomes方法由子类实现
 		ConditionOutcome[] outcomes = getOutcomes(autoConfigurationClasses, autoConfigurationMetadata);
 		boolean[] match = new boolean[outcomes.length];
 		for (int i = 0; i < outcomes.length; i++) {
+			// outcomes对应下标的值为null，或者match值为ture则表示符合，设置对应下标为ture，表示该候选类可以自动装配
 			match[i] = (outcomes[i] == null || outcomes[i].isMatch());
 			if (!match[i] && outcomes[i] != null) {
 				logOutcome(autoConfigurationClasses[i], outcomes[i]);
@@ -87,8 +89,10 @@ abstract class FilteringSpringBootCondition extends SpringBootCondition
 			return Collections.emptyList();
 		}
 		List<String> matches = new ArrayList<>(classNames.size());
+		// 遍历候选类@ConditionalOnBean，ConditionalOnClass等注解的value值，
 		for (String candidate : classNames) {
 			if (classNameFilter.matches(candidate, classLoader)) {
+				// 表示不能能够加载到对应的类
 				matches.add(candidate);
 			}
 		}
@@ -125,6 +129,7 @@ abstract class FilteringSpringBootCondition extends SpringBootCondition
 
 			@Override
 			public boolean matches(String className, ClassLoader classLoader) {
+				// isPresent返回ture或者false，为ture则表示能加载到该类，false则表示加载不到
 				return !isPresent(className, classLoader);
 			}
 
@@ -137,10 +142,13 @@ abstract class FilteringSpringBootCondition extends SpringBootCondition
 				classLoader = ClassUtils.getDefaultClassLoader();
 			}
 			try {
+				// 根据当前ClassLoader使用反射Class.forName()加载类
 				resolve(className, classLoader);
+				// 如果能加载到返回ture
 				return true;
 			}
 			catch (Throwable ex) {
+				// 如果加载不到返回false
 				return false;
 			}
 		}
