@@ -265,7 +265,7 @@ public class SpringApplication {
 	 */
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public SpringApplication(ResourceLoader resourceLoader, Class<?>... primarySources) {
-		//首先初始化资源加载器，默认为nu
+		//首先初始化资源加载器，默认为null
 		this.resourceLoader = resourceLoader;
 		Assert.notNull(primarySources, "PrimarySources must not be null");
 		// 将主资源类primarySources存储到SpringApplication对象Set类型的primarySources属性中。
@@ -327,7 +327,8 @@ public class SpringApplication {
 			// SimpleCommandLinePropertySource将命令行参数分为两组，分别为：
 			// 1. “选项参数”，选项参数必须以“--”为前缀。
 			// 2. “非选项参数”，非选项参数是未包含“--”前缀的命令行参数。
-			// 例如：根据以上规则，命令行参数--server.port=8088被SimpleCommandLineArgsParser解析为“server.port : 8088”键值属性，添加到DefaultApplicationArguments对象中。
+			// 例如：根据以上规则，命令行参数--server.port=8088
+			// 被SimpleCommandLineArgsParser解析为“server.port : 8088”键值属性，添加到DefaultApplicationArguments对象中。
 			ApplicationArguments applicationArguments = new DefaultApplicationArguments(args);
 			//第五步：准备当前应用程序的环境ConfigurableEnvironment
 			//大致分为6步
@@ -897,7 +898,10 @@ public class SpringApplication {
 	protected void refresh(ConfigurableApplicationContext applicationContext) {
 		// ConfigurableApplicationContext是一个AnnotationConfigServletWebServerApplicationContext
 		// 会调用父类AbstractApplicationContext的refresh方法
-		// 在前面的准备阶段，已经提前准备了一些BFPP，比如SharedMetadataReaderFactoryContextInitializer、ConfigurationWarningsPostProcessor、ConfigFileApplicationListener，
+		// 在前面的准备阶段，已经提前准备了一些BFPP，
+		// 比如SharedMetadataReaderFactoryContextInitializer、
+		// ConfigurationWarningsPostProcessor、
+		// ConfigFileApplicationListener，
 		// 所以在refresh方法里面的invokeBeanFactoryPostProcessors方法会执行这些BFPP，SpringBoot自动装配
 		applicationContext.refresh();
 	}
